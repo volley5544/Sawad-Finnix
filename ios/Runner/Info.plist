@@ -45,5 +45,21 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Deep link: sawadfinnix://sawadfinnix.com/... -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.srisawad.sawad_finnix</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sawadfinnix</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

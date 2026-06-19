@@ -1,16 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/security/pin_service.dart';
+import '../../../core/utils/thai_id.dart';
 import '../models/thaid_status.dart';
 import '../models/user_profile.dart';
 
-/// Creates/loads the Firebase user + profile and stores the PIN.
+/// Builds the user profile and persists it.
 ///
-/// Identity is keyed by the Thai national ID (the stable identifier returned by
-/// ThaiID). The `users/{thaiId}` document holds the profile. An anonymous
-/// Firebase Auth session is established so Firestore security rules can require
-/// authentication.
+/// The Firestore document id is `sha256(pid)`; the document's `uid` field holds
+/// the Firebase Auth UID. The profile (from ThaiID) is stored in
+/// `users/{sha256(pid)}` so it can be used across the app, while the PIN is kept
+/// on-device via [PinService] (flutter_secure_storage) and is never written to
+/// Firestore.
 class UserRepository {
   UserRepository({
     FirebaseAuth? auth,
@@ -27,57 +30,97 @@ class UserRepository {
   CollectionReference<Map<String, dynamic>> get _users =>
       _db.collection('users');
 
-  /// Ensures there is an authenticated (anonymous) Firebase session.
+  /// Ensures there is an authenticated (anonymous) Firebase session so that
+  /// Firestore security rules requiring `request.auth != null` are satisfied.
   Future<User> ensureSignedIn() async {
     final current = _auth.currentUser;
-    if (current != null) return current;
+    if (current != null) {
+      debugPrint('[auth] reusing session uid=${current.uid} '
+          'anonymous=${current.isAnonymous}');
+      return current;
+    }
     final cred = await _auth.signInAnonymously();
-    return cred.user!;
+    final user = cred.user!;
+    debugPrint('[auth] anonymous sign-in created uid=${user.uid} '
+        'anonymous=${user.isAnonymous}');
+    return user;
   }
 
-  /// Create-or-get: returns the existing profile for [thaiId], or creates a new
-  /// user + profile from the onboarding data if none exists.
+  /// Builds a [UserProfile] from the verified onboarding data (no network).
   Future<UserProfile> createOrGetProfile({
     required String thaiId,
     String? phoneNumber,
     ThaidPerson? person,
     DateTime? dateOfBirth,
   }) async {
-    await ensureSignedIn();
-    final docRef = _users.doc(thaiId);
-    final snapshot = await docRef.get();
-
-    if (snapshot.exists && snapshot.data() != null) {
-      return UserProfile.fromMap(snapshot.data()!);
-    }
-
-    final profile = UserProfile(
-      uid: thaiId,
+    return UserProfile(
+      // uid is set to the Firebase Auth UID when the profile is persisted.
+      uid: '',
       phoneNumber: phoneNumber,
       thaiId: thaiId,
-      firstName: person?.firstName,
-      lastName: person?.lastName,
       dateOfBirth: person?.birthDate ?? dateOfBirth,
       hasPin: false,
       createdAt: DateTime.now(),
     );
+  }
+
+  /// Parses the `user` object from the get-ThaiID-data API response and upserts
+  /// the profile in Firestore `users/{sha256(pid)}`:
+  ///  - if the document does not exist, the full profile is created;
+  ///  - if it already exists, only `authTime` and `uid` are updated.
+  ///
+  /// The `uid` field stores the current Firebase Auth UID. Returns the profile.
+  Future<UserProfile> saveThaidProfile(
+    Map<String, dynamic> user, {
+    String? phoneNumber,
+  }) async {
+    final authUser = await ensureSignedIn();
+    final parsed = UserProfile.fromThaidUser(user, phoneNumber: phoneNumber);
+    final docId = ThaiId.hash(parsed.thaiId ?? '');
+    final profile = parsed.copyWith(uid: authUser.uid);
+    final docRef = _users.doc(docId);
+    debugPrint('[profile] saving docId=$docId uid=${profile.uid} '
+        'pidLen=${parsed.thaiId?.length}');
+    final snapshot = await docRef.get();
+
+    if (snapshot.exists && snapshot.data() != null) {
+      // Existing user: refresh the authentication time and the auth uid.
+      await docRef.set(
+        {'authTime': profile.authTime, 'uid': profile.uid},
+        SetOptions(merge: true),
+      );
+      debugPrint('[profile] updated existing doc');
+      return UserProfile.fromMap(snapshot.data()!)
+          .copyWith(authTime: profile.authTime, uid: profile.uid);
+    }
+
+    // New user: create the full profile document.
     await docRef.set(profile.toMap());
+    debugPrint('[profile] created new doc');
     return profile;
   }
 
-  /// Stores the PIN (hashed) locally and in the user's Firebase profile.
+  /// Persists [profile] to Firestore `users/{sha256(pid)}` (merge). The `uid`
+  /// field is set to the current Firebase Auth UID. PIN data is excluded.
+  Future<UserProfile> saveProfile(UserProfile profile) async {
+    final authUser = await ensureSignedIn();
+    final docId = ThaiId.hash(profile.thaiId ?? '');
+    final toSave = profile.copyWith(uid: authUser.uid);
+    await _users.doc(docId).set(toSave.toMap(), SetOptions(merge: true));
+    return toSave;
+  }
+
+  /// Stores the PIN (hashed) in local secure storage only.
+  ///
+  /// The PIN is persisted on-device via [PinService] (flutter_secure_storage)
+  /// and reflected in [AppState] for the current session. It is never written
+  /// to Firestore.
   Future<UserProfile> savePin({
     required UserProfile profile,
     required String pin,
   }) async {
     final ownerId = profile.thaiId ?? profile.uid;
     await _pin.savePinLocal(ownerId: ownerId, pin: pin);
-    final hash = PinService.hashPin(pin: pin, salt: ownerId);
-
-    await _users.doc(profile.uid).set(
-      {'pinHash': hash, 'hasPin': true},
-      SetOptions(merge: true),
-    );
     return profile.copyWith(hasPin: true);
   }
 }

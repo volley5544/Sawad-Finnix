@@ -8,6 +8,7 @@ class AppRoutes {
   static const otp = '/onboarding/otp';
   static const thaidInfo = '/onboarding/thaid-info';
   static const thaidVerify = '/onboarding/thaid-verify';
+  static const thaidMismatch = '/onboarding/thaid-mismatch';
   static const onboardingSuccess = '/onboarding/success';
   static const setPin = '/onboarding/set-pin';
 

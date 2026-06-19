@@ -4,6 +4,7 @@ import '../../features/auth/pages/phone_page.dart';
 import '../../features/auth/pages/otp_page.dart';
 import '../../features/auth/pages/thaid_info_page.dart';
 import '../../features/auth/pages/thaid_verify_page.dart';
+import '../../features/auth/pages/thaid_mismatch_page.dart';
 import '../../features/auth/pages/onboarding_success_page.dart';
 import '../../features/auth/pages/set_pin_page.dart';
 import '../../features/home/pages/home_page.dart';
@@ -44,6 +45,10 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.thaidVerify,
         builder: (context, state) => const ThaidVerifyPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.thaidMismatch,
+        builder: (context, state) => const ThaidMismatchPage(),
       ),
       GoRoute(
         path: AppRoutes.onboardingSuccess,

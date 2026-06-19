@@ -45,7 +45,12 @@ class AuthRepository {
   /// Requests a ThaiID verification link + session id.
   Future<ThaidLinkResponse> getThaidLink() async {
     try {
-      final res = await _api.thaid().get('/auth/thaid/link');
+      final res = await _api.thaid().get(
+        '/auth/thaid/link',
+        queryParameters: {
+          'redirect': 'sawadfinnix://sawadfinnix.com/onboarding/success',
+        },
+      );
       final data = res.data;
       if (res.statusCode == 200 && data is Map) {
         return ThaidLinkResponse.fromMap(Map<String, dynamic>.from(data));

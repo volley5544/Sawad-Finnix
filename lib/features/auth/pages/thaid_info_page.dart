@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/router/app_routes.dart';
 import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/thai_id.dart';
 import '../../../core/widgets/app_scaffold.dart';
 
 /// Step 3: capture Thai national ID (13 digits) and date of birth.
@@ -20,6 +20,7 @@ class ThaidInfoPage extends StatefulWidget {
 class _ThaidInfoPageState extends State<ThaidInfoPage> {
   final _idController = TextEditingController();
   DateTime? _dob;
+  String? _idError;
 
   static const _thaiMonths = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -32,7 +33,8 @@ class _ThaidInfoPageState extends State<ThaidInfoPage> {
     return '${d.day} ${_thaiMonths[d.month - 1]} ${d.year + 543}';
   }
 
-  bool get _isValid => _idController.text.trim().length == 13 && _dob != null;
+  bool get _isValid =>
+      ThaiId.digitsOnly(_idController.text).length == 13 && _dob != null;
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -47,8 +49,13 @@ class _ThaidInfoPageState extends State<ThaidInfoPage> {
   }
 
   void _next() {
+    final digits = ThaiId.digitsOnly(_idController.text);
+    if (!ThaiId.isValid(digits)) {
+      setState(() => _idError = 'เลขบัตรประชาชนไม่ถูกต้อง');
+      return;
+    }
     final appState = context.read<AppState>();
-    appState.thaiId = _idController.text.trim();
+    appState.thaiId = digits;
     appState.dateOfBirth = _dob;
     context.push(AppRoutes.thaidVerify);
   }
@@ -89,13 +96,16 @@ class _ThaidInfoPageState extends State<ThaidInfoPage> {
             TextField(
               controller: _idController,
               keyboardType: TextInputType.number,
-              maxLength: 13,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
+              maxLength: 17,
+              inputFormatters: [ThaiIdInputFormatter()],
+              onChanged: (_) => setState(() {
+                if (_idError != null) _idError = null;
+              }),
+              decoration: InputDecoration(
                 hintText: 'X-XXXX-XXXXX-XX-X',
                 counterText: '',
-                prefixIcon: Icon(Icons.badge_outlined),
+                errorText: _idError,
+                prefixIcon: const Icon(Icons.badge_outlined),
               ),
             ),
             const SizedBox(height: 16),

@@ -11,6 +11,7 @@ import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../data/auth_repository.dart';
+import '../data/user_repository.dart';
 import '../models/thaid_status.dart';
 
 /// Step 4: launch ThaiID OAuth and wait for verification via status polling.
@@ -34,6 +35,7 @@ class _ThaidVerifyPageState extends State<ThaidVerifyPage> {
 
   late final AuthRepository _repo =
       AuthRepository(ApiClient(context.read<AppState>().env));
+  final UserRepository _userRepo = UserRepository();
 
   @override
   void dispose() {
@@ -71,6 +73,20 @@ class _ThaidVerifyPageState extends State<ThaidVerifyPage> {
     }
   }
 
+  bool _sameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  /// Extracts the ThaiID `user` object from the status response, falling back
+  /// to common nesting keys, then to the top-level map.
+  Map<String, dynamic> _extractThaidUser(Map<String, dynamic>? raw) {
+    if (raw == null) return const {};
+    for (final key in ['user', 'data', 'person', 'result', 'profile']) {
+      final v = raw[key];
+      if (v is Map) return Map<String, dynamic>.from(v);
+    }
+    return raw;
+  }
+
   void _startPolling(String sessionId) {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -85,14 +101,52 @@ class _ThaidVerifyPageState extends State<ThaidVerifyPage> {
       if (!mounted) return;
       if (status.isSuccess) {
         _pollTimer?.cancel();
-        appState.verifiedPerson = status.person;
-        // Backfill onboarding fields from verified data where available.
-        if (status.person?.pid != null) {
-          appState.thaiId = status.person!.pid;
+        final person = status.person;
+
+        // Compare the ID/DOB the user entered against the verified ThaiID data.
+        final enteredId = appState.thaiId;
+        final enteredDob = appState.dateOfBirth;
+        final verifiedId = person?.pid;
+        final verifiedDob = person?.birthDate;
+
+        final idMatch =
+            enteredId != null && verifiedId != null && enteredId == verifiedId;
+        final dobMatch = enteredDob != null &&
+            verifiedDob != null &&
+            _sameDate(enteredDob, verifiedDob);
+
+        debugPrint('[verify] success hasPerson=${person != null} '
+            'idMatch=$idMatch dobMatch=$dobMatch');
+
+        if (!idMatch || !dobMatch) {
+          context.go(AppRoutes.thaidMismatch);
+          return;
         }
-        if (status.person?.birthDate != null) {
-          appState.dateOfBirth = status.person!.birthDate;
+
+        appState.verifiedPerson = person;
+        // Backfill onboarding fields from the verified data.
+        appState.thaiId = verifiedId;
+        appState.dateOfBirth = verifiedDob;
+
+        // Create (or update) the user profile from the verified ThaiID data.
+        try {
+          final user = _extractThaidUser(status.raw);
+          final profile = await _userRepo.saveThaidProfile(
+            user,
+            phoneNumber: appState.phoneNumber,
+          );
+          if (!mounted) return;
+          appState.setProfile(profile);
+        } catch (e) {
+          if (!mounted) return;
+          setState(() {
+            _phase = _Phase.failed;
+            _error = 'บันทึกข้อมูลผู้ใช้ไม่สำเร็จ: $e';
+          });
+          return;
         }
+
+        if (!mounted) return;
         context.go(AppRoutes.onboardingSuccess);
       } else if (status.state == ThaidVerifyState.failed) {
         _pollTimer?.cancel();

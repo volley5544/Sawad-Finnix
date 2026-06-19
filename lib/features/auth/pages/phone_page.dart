@@ -33,6 +33,7 @@ class _PhonePageState extends State<PhonePage> {
     });
     final appState = context.read<AppState>();
     final repo = AuthRepository(ApiClient(appState.env));
+    print('repo : ${repo}');
     try {
       final otp = await repo.sendOtp(phone);
       appState.phoneNumber = phone;

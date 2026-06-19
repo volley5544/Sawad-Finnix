@@ -64,13 +64,15 @@ class _SetPinPageState extends State<SetPinPage> {
       _error = null;
     });
     try {
-      // Create-or-get the profile, then persist the PIN.
-      var profile = await _userRepo.createOrGetProfile(
-        thaiId: thaiId,
-        phoneNumber: appState.phoneNumber,
-        person: appState.verifiedPerson,
-        dateOfBirth: appState.dateOfBirth,
-      );
+      // Reuse the profile created during ThaiID verification if present;
+      // otherwise build one from the onboarding data. Then persist the PIN.
+      var profile = appState.profile ??
+          await _userRepo.createOrGetProfile(
+            thaiId: thaiId,
+            phoneNumber: appState.phoneNumber,
+            person: appState.verifiedPerson,
+            dateOfBirth: appState.dateOfBirth,
+          );
       profile = await _userRepo.savePin(profile: profile, pin: pin);
       appState.setProfile(profile);
       if (!mounted) return;
@@ -131,6 +133,9 @@ class _SetPinPageState extends State<SetPinPage> {
                 obscureText: true,
                 keyboardType: TextInputType.number,
                 animationType: AnimationType.fade,
+                // The controller is owned by this State; do not let the field
+                // dispose it when it is swapped out (e.g. while _saving).
+                autoDisposeControllers: false,
                 onChanged: (_) {
                   if (_error != null) setState(() => _error = null);
                 },
