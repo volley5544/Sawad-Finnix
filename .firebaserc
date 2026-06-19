@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "sawad-finnix-uat",
+    "uat": "sawad-finnix-uat",
+    "prod": "sawad-finnix"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "841613032673",
+    "project_id": "sawad-finnix-uat",
+    "storage_bucket": "sawad-finnix-uat.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:841613032673:android:b4d7915da351f9adf30ba0",
+        "android_client_info": {
+          "package_name": "com.srisawad.sawad_finnix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC2uGUGZ3UjiUAwarYBYqIC9dYwj4c1x_g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
