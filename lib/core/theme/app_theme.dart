@@ -1,26 +1,29 @@
 import 'package:flutter/material.dart';
 
-/// Sawad Finnix brand colors, derived from the provided designs.
+/// Sawad Finnix brand colors.
 class AppColors {
   AppColors._();
 
-  /// Primary royal/navy blue used for buttons, headers, primary text.
-  static const Color primary = Color(0xFF1B2A8A);
-  static const Color primaryDark = Color(0xFF141F66);
+  /// Main brand color (#db771a).
+  static const Color primary = Color(0xFFDB771A);
+  static const Color primaryDark = Color(0xFFB85F12);
 
-  /// Orange accent used on the balance card and the Finnix mascot.
-  static const Color accent = Color(0xFFF47A1F);
-  static const Color accentDark = Color(0xFFE8631A);
+  /// Accent shares the main brand color (used on the balance card gradient).
+  static const Color accent = Color(0xFFDB771A);
+  static const Color accentDark = Color(0xFFB85F12);
 
-  static const Color background = Color(0xFFF4F6FB);
+  /// Soft background (#fcefe4).
+  static const Color background = Color(0xFFFCEFE4);
   static const Color surface = Colors.white;
-  static const Color textPrimary = Color(0xFF1B2A8A);
-  static const Color textBody = Color(0xFF333A4D);
+
+  /// Primary text color (#003063).
+  static const Color textPrimary = Color(0xFF003063);
+  static const Color textBody = Color(0xFF2D3A4F);
   static const Color textMuted = Color(0xFF8A90A6);
-  static const Color divider = Color(0xFFE6E9F2);
+  static const Color divider = Color(0xFFEADBCB);
 
   /// Banner shown in UAT builds.
-  static const Color uatBanner = Color(0xFFE8631A);
+  static const Color uatBanner = Color(0xFFB85F12);
 }
 
 class AppTheme {
