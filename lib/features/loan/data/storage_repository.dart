@@ -31,10 +31,14 @@ class StorageRepository {
 
   /// Uploads [bytes] as a loan statement for [thaiId], reporting progress in the
   /// range 0.0–1.0 via [onProgress]. Returns the stored file's metadata.
+  ///
+  /// When [requestId] is provided, files are grouped per request at
+  /// `loan_statements/{sha256(thaiId)}/{requestId}/{timestamp}_{fileName}`.
   Future<UploadedFile> uploadStatement({
     required String thaiId,
     required String fileName,
     required Uint8List bytes,
+    String? requestId,
     String? contentType,
     void Function(double progress)? onProgress,
   }) async {
@@ -46,7 +50,10 @@ class StorageRepository {
     final docId = ThaiId.hash(thaiId);
     final safeName = _sanitize(fileName);
     final objectName = '${DateTime.now().millisecondsSinceEpoch}_$safeName';
-    final ref = _storage.ref('loan_statements/$docId/$objectName');
+    final folder = (requestId != null && requestId.isNotEmpty)
+        ? 'loan_statements/$docId/$requestId'
+        : 'loan_statements/$docId';
+    final ref = _storage.ref('$folder/$objectName');
 
     final task = ref.putData(
       bytes,

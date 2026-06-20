@@ -80,6 +80,8 @@ class _LoanRequestPageState extends State<LoanRequestPage> {
   String? _stepError;
 
   final AppPermissions _permissions = const AppPermissions();
+  final LoanRepository _loanRepo = LoanRepository();
+  late final String _requestId;
 
   // Controllers for the free-text inputs.
   final _addressCtrl = TextEditingController();
@@ -106,6 +108,7 @@ class _LoanRequestPageState extends State<LoanRequestPage> {
   void initState() {
     super.initState();
     _profile = context.read<AppState>().profile;
+    _requestId = _loanRepo.newRequestId(_profile?.thaiId ?? '');
     _loadPermissionStatuses();
   }
 
@@ -231,7 +234,8 @@ class _LoanRequestPageState extends State<LoanRequestPage> {
     }
     final confirmed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => _SummaryPage(profile: profile, data: _data),
+        builder: (_) =>
+            _SummaryPage(profile: profile, data: _data, requestId: _requestId),
       ),
     );
     if (confirmed == true && mounted) {
@@ -612,7 +616,7 @@ class _LoanRequestPageState extends State<LoanRequestPage> {
   // ---- Step 4: credit (statement upload to Firebase Storage) ---------------
 
   Widget _buildCreditStep() {
-    return _CreditStep(data: _data, profile: _profile);
+    return _CreditStep(data: _data, profile: _profile, requestId: _requestId);
   }
 
   // ---- Step 5: bank ---------------------------------------------------------
@@ -913,10 +917,15 @@ class DottedUploadBox extends StatelessWidget {
 /// showing per-file progress and allowing removal. Uploaded file references are
 /// written into [data.statements] for persistence on submit.
 class _CreditStep extends StatefulWidget {
-  const _CreditStep({required this.data, required this.profile});
+  const _CreditStep({
+    required this.data,
+    required this.profile,
+    required this.requestId,
+  });
 
   final _LoanFormData data;
   final UserProfile? profile;
+  final String requestId;
 
   @override
   State<_CreditStep> createState() => _CreditStepState();
@@ -973,6 +982,7 @@ class _CreditStepState extends State<_CreditStep> {
           thaiId: thaiId,
           fileName: file.name,
           bytes: bytes,
+          requestId: widget.requestId,
           onProgress: (p) {
             if (mounted) setState(() => _progress = p);
           },
@@ -1102,9 +1112,14 @@ class _CreditStepState extends State<_CreditStep> {
 // --- Summary + consents + submit -------------------------------------------
 
 class _SummaryPage extends StatefulWidget {
-  const _SummaryPage({required this.profile, required this.data});
+  const _SummaryPage({
+    required this.profile,
+    required this.data,
+    required this.requestId,
+  });
   final UserProfile profile;
   final _LoanFormData data;
+  final String requestId;
 
   @override
   State<_SummaryPage> createState() => _SummaryPageState();
@@ -1157,7 +1172,11 @@ class _SummaryPageState extends State<_SummaryPage> {
       _error = null;
     });
     try {
-      await _repo.submit(profile: widget.profile, request: _buildRequest());
+      await _repo.submit(
+        profile: widget.profile,
+        request: _buildRequest(),
+        requestId: widget.requestId,
+      );
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {

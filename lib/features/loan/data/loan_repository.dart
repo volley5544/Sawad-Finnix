@@ -32,11 +32,27 @@ class LoanRepository {
     return cred.user!;
   }
 
+  CollectionReference<Map<String, dynamic>> _requests(String thaiId) =>
+      _db.collection('users').doc(ThaiId.hash(thaiId)).collection('loanRequests');
+
+  /// Pre-generates a loan-request document id (no network) so statement files
+  /// can be grouped under the same id in Storage before the request is
+  /// submitted. Falls back to a standalone id when [thaiId] is empty.
+  String newRequestId(String thaiId) {
+    if (thaiId.isEmpty) return _db.collection('loanRequests').doc().id;
+    return _requests(thaiId).doc().id;
+  }
+
   /// Builds a [LoanRequest] from the verified [profile] and the collected
-  /// [form] data, persists it, and returns the new document id.
+  /// form data, persists it, and returns the document id.
+  ///
+  /// When [requestId] is supplied (from [newRequestId]) the document is written
+  /// at that deterministic id and the id is stored on the document, so it lines
+  /// up with the `loan_statements/{hash}/{requestId}/...` Storage folder.
   Future<String> submit({
     required UserProfile profile,
     required LoanRequest request,
+    String? requestId,
   }) async {
     final user = await _ensureSignedIn();
     final thaiId = profile.thaiId ?? '';
@@ -44,16 +60,18 @@ class LoanRepository {
       throw StateError('ไม่พบเลขบัตรประชาชนของผู้ใช้');
     }
     final docId = ThaiId.hash(thaiId);
-    final collection =
-        _db.collection('users').doc(docId).collection('loanRequests');
+    final collection = _requests(thaiId);
+    final docRef =
+        (requestId != null && requestId.isNotEmpty) ? collection.doc(requestId) : collection.doc();
 
-    // Stamp the current auth uid onto the persisted request.
+    // Stamp the current auth uid and the request's own id onto the document.
     final payload = {
       ...request.toMap(),
       'uid': user.uid,
+      'requestId': docRef.id,
     };
-    final ref = await collection.add(payload);
-    debugPrint('[loan] submitted request ${ref.id} under users/$docId');
-    return ref.id;
+    await docRef.set(payload);
+    debugPrint('[loan] submitted request ${docRef.id} under users/$docId');
+    return docRef.id;
   }
 }
