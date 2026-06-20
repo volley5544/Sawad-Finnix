@@ -53,6 +53,9 @@ dependencies:
   # File picking + upload (loan statement attachments)
   file_picker: ^8.1.4
 
+  # Save QR / images to the device photo gallery
+  gal: ^2.3.0
+
   # Onboarding / ThaiID
   url_launcher: ^6.3.1
   flutter_secure_storage: ^9.2.2

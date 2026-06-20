@@ -1,15 +1,24 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/router/app_routes.dart';
+import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../data/loan_account_repository.dart';
 
-/// QR / barcode payment screen with an expiry countdown and a list of bank
-/// channels the user can pay through.
+/// QR / barcode payment screen. Shows the real amount due, lets the user save
+/// the QR image to their photo gallery, and (on simulated success) deducts the
+/// payment from the active loan.
 class PaymentQrPage extends StatefulWidget {
   const PaymentQrPage({super.key});
 
@@ -21,6 +30,11 @@ class _PaymentQrPageState extends State<PaymentQrPage> {
   static const _initialSeconds = 15 * 60; // 15:00
   int _remaining = _initialSeconds;
   Timer? _timer;
+  bool _saving = false;
+  bool _processing = false;
+
+  final GlobalKey _qrKey = GlobalKey();
+  final LoanAccountRepository _loanRepo = LoanAccountRepository();
 
   @override
   void initState() {
@@ -46,15 +60,82 @@ class _PaymentQrPageState extends State<PaymentQrPage> {
     return '$m.$s';
   }
 
+  double _amount(AppState s) =>
+      s.pendingPaymentAmount ?? s.activeLoan?.installmentAmount ?? 0;
+
+  /// Captures the QR widget and saves it to the device photo gallery.
+  Future<void> _saveQrToGallery() async {
+    if (kIsWeb) {
+      _snack('การบันทึกรูปไม่รองรับบนเว็บ');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final boundary = _qrKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) throw Exception('ไม่พบ QR');
+      final image = await boundary.toImage(pixelRatio: 3);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw Exception('แปลงรูปไม่สำเร็จ');
+      final bytes = byteData.buffer.asUint8List();
+
+      final hasAccess = await Gal.hasAccess(toAlbum: true);
+      if (!hasAccess) await Gal.requestAccess(toAlbum: true);
+      await Gal.putImageBytes(bytes,
+          name: 'sawad-finnix-qr-${DateTime.now().millisecondsSinceEpoch}');
+      if (!mounted) return;
+      _snack('บันทึกคิวอาร์โค้ดลงในอัลบั้มรูปแล้ว');
+    } on GalException catch (e) {
+      if (!mounted) return;
+      _snack('บันทึกรูปไม่สำเร็จ: ${e.type.message}');
+    } catch (e) {
+      if (!mounted) return;
+      _snack('บันทึกรูปไม่สำเร็จ: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// Simulates a successful payment: deducts the amount from the active loan,
+  /// best-effort-persists it, then shows the receipt.
+  Future<void> _confirmPayment() async {
+    final appState = context.read<AppState>();
+    final loan = appState.activeLoan;
+    final amount = _amount(appState);
+    if (loan == null || amount <= 0) return;
+
+    setState(() => _processing = true);
+
+    // Update app state immediately so the UI reflects the new balance.
+    appState.applyPayment(amount);
+
+    // Best-effort persistence (won't block the success flow).
+    try {
+      await _loanRepo.recordPayment(loan: loan, amount: amount);
+    } catch (_) {/* already logged in repo */}
+
+    if (!mounted) return;
+    setState(() => _processing = false);
+    context.push(AppRoutes.receipt);
+  }
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final amount = _amount(appState);
+
     return AppScaffold(
       title: 'ชำระผ่านบาร์โค้ดหรือคิวอาร์โค้ด',
       backgroundColor: AppColors.primary,
       padding: const EdgeInsets.all(16),
       body: ListView(
         children: [
-          _qrCard(context),
+          _qrCard(context, amount),
           const SizedBox(height: 16),
           _channelsCard(),
         ],
@@ -62,7 +143,7 @@ class _PaymentQrPageState extends State<PaymentQrPage> {
     );
   }
 
-  Widget _qrCard(BuildContext context) {
+  Widget _qrCard(BuildContext context, double amount) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -79,44 +160,52 @@ class _PaymentQrPageState extends State<PaymentQrPage> {
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
           const SizedBox(height: 16),
+          // RepaintBoundary lets us capture the QR as an image to save it.
           Center(
-            child: QrImageView(
-              data: 'SAWAD-FINNIX|PAY|5000.68|${DateTime.now().millisecondsSinceEpoch}',
-              version: QrVersions.auto,
-              size: 200,
+            child: RepaintBoundary(
+              key: _qrKey,
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.all(12),
+                child: QrImageView(
+                  data: 'SAWAD-FINNIX|PAY|${amount.toStringAsFixed(2)}|'
+                      '${DateTime.now().millisecondsSinceEpoch}',
+                  version: QrVersions.auto,
+                  size: 200,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 16),
-          const Text('จำนวนเงินที่ต้องชำระ ******** บาท',
+          Text('จำนวนเงินที่ต้องชำระ ${Formatters.baht(amount)}',
               textAlign: TextAlign.center,
-              style: TextStyle(fontWeight: FontWeight.w600)),
+              style: const TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('บันทึกลงในอัลบั้มรูปแล้ว')),
-              );
-            },
-            child: const Text('บันทึกลงในอัลบั้มรูป'),
-          ),
-          const Divider(height: 28),
-          InkWell(
-            onTap: () {},
-            child: Row(
-              children: const [
-                Icon(Icons.view_week, color: AppColors.primary),
-                SizedBox(width: 8),
-                Text('บาร์โค้ด', style: TextStyle(fontWeight: FontWeight.w600)),
-                Spacer(),
-                Icon(Icons.chevron_right, color: AppColors.textMuted),
-              ],
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _saveQrToGallery,
+            icon: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download),
+            label: Text(_saving ? 'กำลังบันทึก...' : 'บันทึกลงในอัลบั้มรูป'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              minimumSize: const Size.fromHeight(48),
+              shape: const StadiumBorder(),
             ),
           ),
-          // Demo shortcut to the receipt (real flow waits for payment webhook).
           const SizedBox(height: 8),
-          TextButton(
-            onPressed: () => context.push(AppRoutes.receipt),
-            child: const Text('จำลองชำระเงินสำเร็จ'),
+          ElevatedButton(
+            onPressed: _processing ? null : _confirmPayment,
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              shape: const StadiumBorder(),
+            ),
+            child: Text(_processing ? 'กำลังดำเนินการ...' : 'จำลองชำระเงินสำเร็จ'),
           ),
         ],
       ),
@@ -160,12 +249,6 @@ class _PaymentQrPageState extends State<PaymentQrPage> {
           const Text(
             'คุณสามารถชำระผ่านทางแอพพลิเคชันของธนาคารทุกธนาคาร',
             style: TextStyle(color: AppColors.textBody),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'หมายเหตุ:\n- คุณสามารถตรวจสอบรายชื่อธนาคารและผู้ให้บริการที่เข้าร่วม'
-            'ได้จากเว็บไซต์ของธนาคารแห่งประเทศไทย',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
           ),
         ],
       ),

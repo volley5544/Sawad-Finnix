@@ -7,6 +7,8 @@ import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../loan/data/loan_account_repository.dart';
+import '../../loan/models/loan.dart';
 import '../models/loan_summary.dart';
 
 /// Home page with credit-line card, statement summary, promo banner and a
@@ -23,10 +25,30 @@ class _HomePageState extends State<HomePage> {
   final LoanSummary _summary = LoanSummary.mock();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadLoan());
+  }
+
+  /// Best-effort: if we don't already have a loan in state, try to load one
+  /// from Firestore for the signed-in user.
+  Future<void> _loadLoan() async {
+    final appState = context.read<AppState>();
+    if (appState.activeLoan != null) return;
+    final thaiId = appState.profile?.thaiId ?? '';
+    if (thaiId.isEmpty) return;
+    final loan = await LoanAccountRepository().loadActiveLoan(thaiId);
+    if (loan != null && mounted) appState.setActiveLoan(loan);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final loan = context.watch<AppState>().activeLoan;
     return AppScaffold(
       showAppBar: false,
-      body: _tab == 0 ? _HomeTab(summary: _summary) : const _MyInfoTab(),
+      body: _tab == 0
+          ? _HomeTab(summary: _summary, loan: loan)
+          : const _MyInfoTab(),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
@@ -50,9 +72,10 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _HomeTab extends StatelessWidget {
-  const _HomeTab({required this.summary});
+  const _HomeTab({required this.summary, this.loan});
 
   final LoanSummary summary;
+  final Loan? loan;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +113,10 @@ class _HomeTab extends StatelessWidget {
               onTap: () => context.push(AppRoutes.loanRequest),
             ),
             const SizedBox(height: 16),
-            _StatementCard(summary: summary),
+            if (loan != null)
+              _LoanCard(loan: loan!)
+            else
+              _StatementCard(summary: summary),
             const SizedBox(height: 16),
             const _PromoBanner(),
           ],
@@ -216,6 +242,142 @@ class _LinkRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LoanCard extends StatelessWidget {
+  const _LoanCard({required this.loan});
+
+  final Loan loan;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('สินเชื่อของคุณ',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: loan.isClosed
+                      ? Colors.green.withValues(alpha: 0.12)
+                      : AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  loan.isClosed ? 'ชำระครบแล้ว' : 'อนุมัติแล้ว',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: loan.isClosed ? Colors.green : AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text('ยอดสินเชื่อคงเหลือ',
+              style: TextStyle(color: AppColors.textMuted)),
+          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                Formatters.money(loan.outstandingBalance),
+                style: const TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Text('บาท', style: TextStyle(color: AppColors.textMuted)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: loan.termMonths == 0
+                  ? 0
+                  : loan.installmentsPaid / loan.termMonths,
+              minHeight: 6,
+              backgroundColor: AppColors.divider,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'ผ่อนแล้ว ${loan.installmentsPaid}/${loan.termMonths} งวด',
+            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
+          const Divider(height: 28),
+          _kv('ค่างวดต่อเดือน', Formatters.baht(loan.installmentAmount)),
+          const SizedBox(height: 6),
+          _kv('วันครบกำหนดถัดไป', Formatters.thaiDate(loan.nextDueDate)),
+          if (!loan.isClosed) ...[
+            const SizedBox(height: 6),
+            _kv('ครบกำหนดในอีก', '${loan.daysUntilDue} วัน', bold: true),
+          ],
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => context.push(AppRoutes.loanDetail),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    minimumSize: const Size.fromHeight(46),
+                    shape: const StadiumBorder(),
+                  ),
+                  child: const Text('รายละเอียด'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: loan.isClosed
+                      ? null
+                      : () => context.push(AppRoutes.paymentChannels),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(46),
+                    shape: const StadiumBorder(),
+                  ),
+                  child: const Text('จ่ายเลย'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kv(String k, String v, {bool bold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(k, style: const TextStyle(color: AppColors.textBody)),
+        Text(v,
+            style: TextStyle(
+              color: AppColors.textBody,
+              fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+            )),
+      ],
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../config/env_config.dart';
 import '../../features/auth/models/user_profile.dart';
 import '../../features/auth/models/thaid_status.dart';
+import '../../features/loan/models/loan.dart';
 
 /// Global application state, accessible everywhere in the app.
 ///
@@ -87,6 +88,43 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- Loan account --------------------------------------------------------
+
+  /// The user's current approved loan (mock-approved on request submit).
+  Loan? _activeLoan;
+  Loan? get activeLoan => _activeLoan;
+
+  /// True when there is a loan that still has an outstanding balance.
+  bool get hasActiveLoan => _activeLoan != null && !_activeLoan!.isClosed;
+
+  void setActiveLoan(Loan? loan) {
+    _activeLoan = loan;
+    notifyListeners();
+  }
+
+  /// Applies a payment of [amount] to the active loan, deducting it from the
+  /// outstanding balance and closing the loan when fully paid.
+  void applyPayment(double amount) {
+    final loan = _activeLoan;
+    if (loan == null || amount <= 0) return;
+    final newPaid =
+        (loan.paidAmount + amount).clamp(0, loan.totalPayable).toDouble();
+    _activeLoan = loan.copyWith(
+      paidAmount: newPaid,
+      status: newPaid >= loan.totalPayable - 0.005 ? 'closed' : 'active',
+    );
+    notifyListeners();
+  }
+
+  /// Amount the user is about to pay (carried from the pay screen to the QR /
+  /// receipt screens).
+  double? _pendingPaymentAmount;
+  double? get pendingPaymentAmount => _pendingPaymentAmount;
+  set pendingPaymentAmount(double? value) {
+    _pendingPaymentAmount = value;
+    notifyListeners();
+  }
+
   /// Clears all session/onboarding state (e.g. on sign-out).
   void reset() {
     _phoneNumber = null;
@@ -97,6 +135,8 @@ class AppState extends ChangeNotifier {
     _otpRef = null;
     _verifiedPerson = null;
     _profile = null;
+    _activeLoan = null;
+    _pendingPaymentAmount = null;
     notifyListeners();
   }
 }

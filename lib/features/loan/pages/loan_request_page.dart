@@ -13,6 +13,7 @@ import '../../../core/utils/thai_id.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../auth/models/user_profile.dart';
 import '../data/loan_repository.dart';
+import '../data/loan_account_repository.dart';
 import '../data/storage_repository.dart';
 import '../models/loan_request.dart';
 import '../models/uploaded_file.dart';
@@ -1127,6 +1128,7 @@ class _SummaryPage extends StatefulWidget {
 
 class _SummaryPageState extends State<_SummaryPage> {
   final LoanRepository _repo = LoanRepository();
+  final LoanAccountRepository _loanAccountRepo = LoanAccountRepository();
 
   bool _agreeTerms = false;
   bool _marketing = false;
@@ -1177,6 +1179,13 @@ class _SummaryPageState extends State<_SummaryPage> {
         request: _buildRequest(),
         requestId: widget.requestId,
       );
+      // Mock approval: immediately create an approved loan tied to this request
+      // and set it as the active loan so it shows on the home page.
+      final loan = await _loanAccountRepo.createApprovedLoan(
+        profile: widget.profile,
+        loanId: widget.requestId,
+      );
+      AppState.instance.setActiveLoan(loan);
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {

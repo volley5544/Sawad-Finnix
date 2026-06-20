@@ -10,6 +10,8 @@
 	<string>ใช้รายชื่อผู้ติดต่อเพื่อประกอบการพิจารณาวงเงินสินเชื่อของคุณ</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>ใช้ตำแหน่งปัจจุบันเพื่อประกอบการพิจารณาวงเงินสินเชื่อของคุณ</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>บันทึกคิวอาร์โค้ดการชำระเงินลงในอัลบั้มรูปของคุณ</string>
 	<key>CFBundleDisplayName</key>
 	<string>Sawad Finnix</string>
 	<key>CFBundleExecutable</key>

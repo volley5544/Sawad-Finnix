@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/router/app_routes.dart';
+import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../models/loan.dart';
 
-/// Pay loan: choose minimum or custom amount, enter amount, review breakdown.
+/// Pay loan: choose the monthly installment or a custom amount, review the
+/// breakdown, then continue to the QR screen. Amounts come from the active loan.
 class PayLoanPage extends StatefulWidget {
   const PayLoanPage({super.key});
 
@@ -16,16 +20,18 @@ class PayLoanPage extends StatefulWidget {
 }
 
 class _PayLoanPageState extends State<PayLoanPage> {
-  static const double _totalDue = 5000.68;
-  bool _custom = true; // จ่ายตามใจ selected by default in the design
+  bool _custom = false;
   final _amountController = TextEditingController();
 
-  double get _amount {
-    if (!_custom) return _totalDue;
+  double _installmentDue(Loan loan) =>
+      loan.installmentAmount > loan.outstandingBalance
+          ? loan.outstandingBalance
+          : loan.installmentAmount;
+
+  double _amount(Loan loan) {
+    if (!_custom) return _installmentDue(loan);
     return double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0;
   }
-
-  bool get _canPay => _amount > 0;
 
   @override
   void dispose() {
@@ -35,28 +41,51 @@ class _PayLoanPageState extends State<PayLoanPage> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final loan = appState.activeLoan;
+
+    if (loan == null) {
+      return const AppScaffold(
+        title: 'ชำระเงินสินเชื่อ',
+        padding: EdgeInsets.all(16),
+        body: Center(
+          child: Text('ยังไม่มีสินเชื่อที่ใช้งานอยู่',
+              style: TextStyle(color: AppColors.textMuted)),
+        ),
+      );
+    }
+
+    final amount = _amount(loan);
+    final exceeds = amount > loan.outstandingBalance + 0.005;
+    final canPay = amount > 0 && !exceeds;
+
     return AppScaffold(
       title: 'ชำระเงินสินเชื่อ',
-      actions: const [
-        Icon(Icons.help_outline),
-        SizedBox(width: 12),
-      ],
+      actions: const [Icon(Icons.help_outline), SizedBox(width: 12)],
       padding: const EdgeInsets.all(16),
       body: ListView(
         children: [
           const SizedBox(height: 8),
           _toggle(),
           const SizedBox(height: 16),
-          _summaryRow('สรุปยอดที่ต้องชำระ', Formatters.baht(_totalDue)),
+          _summaryRow('ยอดค้างชำระทั้งหมด',
+              Formatters.baht(loan.outstandingBalance)),
+          const SizedBox(height: 8),
+          _summaryRow('ค่างวดต่อเดือน', Formatters.baht(loan.installmentAmount)),
           const SizedBox(height: 16),
-          _amountCard(),
+          _amountCard(loan, amount, exceeds),
           const SizedBox(height: 16),
-          _breakdownCard(),
+          _breakdownCard(amount),
         ],
       ),
       bottomBar: ElevatedButton(
-        onPressed: _canPay ? () => context.push(AppRoutes.paymentQr) : null,
-        child: const Text('ชำระเงินล่วงหน้า'),
+        onPressed: canPay
+            ? () {
+                appState.pendingPaymentAmount = amount;
+                context.push(AppRoutes.paymentQr);
+              }
+            : null,
+        child: const Text('ชำระเงิน'),
       ),
     );
   }
@@ -72,12 +101,8 @@ class _PayLoanPageState extends State<PayLoanPage> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _segment('จ่ายขั้นต่ำ', !_custom, () {
-              setState(() => _custom = false);
-            }),
-            _segment('จ่ายตามใจ', _custom, () {
-              setState(() => _custom = true);
-            }),
+            _segment('จ่ายค่างวด', !_custom, () => setState(() => _custom = false)),
+            _segment('จ่ายตามใจ', _custom, () => setState(() => _custom = true)),
           ],
         ),
       ),
@@ -120,7 +145,7 @@ class _PayLoanPageState extends State<PayLoanPage> {
     );
   }
 
-  Widget _amountCard() {
+  Widget _amountCard(Loan loan, double amount, bool exceeds) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -144,13 +169,12 @@ class _PayLoanPageState extends State<PayLoanPage> {
                 child: _custom
                     ? TextField(
                         controller: _amountController,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                         textAlign: TextAlign.center,
                         onChanged: (_) => setState(() {}),
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'[0-9.]')),
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                         ],
                         decoration: const InputDecoration(
                           hintText: 'กรุณาใส่จำนวนเงิน',
@@ -163,7 +187,7 @@ class _PayLoanPageState extends State<PayLoanPage> {
                             color: AppColors.primary),
                       )
                     : Text(
-                        Formatters.money(_totalDue),
+                        Formatters.money(amount),
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                             fontSize: 20,
@@ -175,17 +199,22 @@ class _PayLoanPageState extends State<PayLoanPage> {
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            'อีก 42 วัน จะถึงวันครบกำหนดชำระ สามารถเลือกจ่ายขั้นต่ำได้หลังจาก 28 วัน',
+          Text(
+            exceeds
+                ? 'จำนวนเงินต้องไม่เกินยอดค้างชำระ '
+                    '(${Formatters.baht(loan.outstandingBalance)})'
+                : 'ครบกำหนดชำระ ${Formatters.thaiDate(loan.nextDueDate)}',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+            style: TextStyle(
+                color: exceeds ? Colors.red : AppColors.textMuted,
+                fontSize: 12),
           ),
         ],
       ),
     );
   }
 
-  Widget _breakdownCard() {
+  Widget _breakdownCard(double amount) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -198,13 +227,12 @@ class _PayLoanPageState extends State<PayLoanPage> {
           const Text('รายการชำระเงิน',
               style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
-          _row('จำนวนเงินที่ต้องจ่าย', Formatters.baht(_amount)),
+          _row('จำนวนเงินที่ต้องจ่าย', Formatters.baht(amount)),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('ส่วนลด',
-                  style: TextStyle(color: AppColors.textBody)),
+              const Text('ส่วนลด', style: TextStyle(color: AppColors.textBody)),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -213,13 +241,12 @@ class _PayLoanPageState extends State<PayLoanPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Text('ไม่มีคูปองที่ใช้ได้',
-                    style: TextStyle(
-                        color: AppColors.textMuted, fontSize: 12)),
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
               ),
             ],
           ),
           const Divider(height: 24),
-          _row('ยอดชำระจริง', Formatters.baht(_amount), bold: true),
+          _row('ยอดชำระจริง', Formatters.baht(amount), bold: true),
         ],
       ),
     );
