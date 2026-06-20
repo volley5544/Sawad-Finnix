@@ -12,6 +12,9 @@ class AppRoutes {
   static const onboardingSuccess = '/onboarding/success';
   static const setPin = '/onboarding/set-pin';
 
+  // Returning user sign-in (second use): PIN + biometric.
+  static const pinLogin = '/login/pin';
+
   // Main
   static const home = '/home';
 

@@ -1,6 +1,8 @@
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/pages/phone_page.dart';
+import '../../features/auth/pages/splash_page.dart';
+import '../../features/auth/pages/pin_login_page.dart';
 import '../../features/auth/pages/otp_page.dart';
 import '../../features/auth/pages/thaid_info_page.dart';
 import '../../features/auth/pages/thaid_verify_page.dart';
@@ -24,11 +26,15 @@ class AppRouter {
   AppRouter._();
 
   static final GoRouter router = GoRouter(
-    initialLocation: AppRoutes.phone,
+    initialLocation: AppRoutes.splash,
     routes: [
       GoRoute(
         path: AppRoutes.splash,
-        builder: (context, state) => const PhonePage(),
+        builder: (context, state) => const SplashPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.pinLogin,
+        builder: (context, state) => const PinLoginPage(),
       ),
       GoRoute(
         path: AppRoutes.phone,
@@ -52,7 +58,13 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.onboardingSuccess,
-        builder: (context, state) => const OnboardingSuccessPage(),
+        // ThaiID redirects (deep link) to this route carrying the verification
+        // session id, e.g. sawadfinnix://sawadfinnix.com/onboarding/success?sessionId=...
+        builder: (context, state) => OnboardingSuccessPage(
+          sessionId: state.uri.queryParameters['sessionId'] ??
+              state.uri.queryParameters['session_id'] ??
+              state.uri.queryParameters['session'],
+        ),
       ),
       GoRoute(
         path: AppRoutes.setPin,

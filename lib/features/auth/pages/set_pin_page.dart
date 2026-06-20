@@ -59,22 +59,28 @@ class _SetPinPageState extends State<SetPinPage> {
       return;
     }
 
+    // The profile must already be persisted (Firestore upsert + anonymous
+    // Firebase Auth) by the ThaiID callback on /onboarding/success. If it is
+    // missing or has no Auth uid, do NOT proceed to home — the user was never
+    // actually signed in / saved. Send them back to re-verify.
+    final profile = appState.profile;
+    if (profile == null || profile.uid.isEmpty) {
+      setState(() {
+        _firstEntry = null;
+        _controller.clear();
+        _error = 'ไม่พบข้อมูลผู้ใช้ที่ยืนยันแล้ว กรุณายืนยันตัวตนใหม่อีกครั้ง';
+      });
+      return;
+    }
+
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      // Reuse the profile created during ThaiID verification if present;
-      // otherwise build one from the onboarding data. Then persist the PIN.
-      var profile = appState.profile ??
-          await _userRepo.createOrGetProfile(
-            thaiId: thaiId,
-            phoneNumber: appState.phoneNumber,
-            person: appState.verifiedPerson,
-            dateOfBirth: appState.dateOfBirth,
-          );
-      profile = await _userRepo.savePin(profile: profile, pin: pin);
-      appState.setProfile(profile);
+      // Persist the PIN (hashed) locally; the profile itself is already saved.
+      final saved = await _userRepo.savePin(profile: profile, pin: pin);
+      appState.setProfile(saved);
       if (!mounted) return;
       context.go(AppRoutes.home);
     } catch (e) {

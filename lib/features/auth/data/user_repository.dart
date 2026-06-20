@@ -123,4 +123,25 @@ class UserRepository {
     await _pin.savePinLocal(ownerId: ownerId, pin: pin);
     return profile.copyWith(hasPin: true);
   }
+
+  /// Reloads the latest profile from Firestore `users/{sha256(thaiId)}`.
+  ///
+  /// Used by the PIN-login flow on a cold start: after the user authenticates
+  /// (PIN or biometric) we re-fetch the profile so [AppState] reflects any
+  /// server-side changes that happened since the last session. Ensures an
+  /// (anonymous) Firebase Auth session exists first so Firestore rules pass.
+  /// Returns null when no document exists for [thaiId].
+  Future<UserProfile?> loadProfileByThaiId(String thaiId) async {
+    if (thaiId.isEmpty) return null;
+    await ensureSignedIn();
+    final docId = ThaiId.hash(thaiId);
+    final snapshot = await _users.doc(docId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) {
+      debugPrint('[profile] loadProfileByThaiId: no doc for $docId');
+      return null;
+    }
+    debugPrint('[profile] loadProfileByThaiId: loaded $docId');
+    return UserProfile.fromMap(data);
+  }
 }

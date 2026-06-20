@@ -4,6 +4,12 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>ใช้ Face ID เพื่อเข้าสู่ระบบอย่างปลอดภัย</string>
+	<key>NSContactsUsageDescription</key>
+	<string>ใช้รายชื่อผู้ติดต่อเพื่อประกอบการพิจารณาวงเงินสินเชื่อของคุณ</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>ใช้ตำแหน่งปัจจุบันเพื่อประกอบการพิจารณาวงเงินสินเชื่อของคุณ</string>
 	<key>CFBundleDisplayName</key>
 	<string>Sawad Finnix</string>
 	<key>CFBundleExecutable</key>

@@ -49,6 +49,23 @@ class PinService {
     return (await _storage.read(key: _kPinHash)) != null;
   }
 
+  /// The owner id (Thai ID) the local PIN was saved against, or null if none.
+  ///
+  /// Useful on a cold start where [AppState] has no profile yet: the owner id
+  /// is the salt needed to verify the PIN and the key used to reload the
+  /// profile from Firestore.
+  Future<String?> getOwner() async {
+    return _storage.read(key: _kPinOwner);
+  }
+
+  /// Verifies [pin] against the locally stored hash using the stored owner id
+  /// as the salt. Returns false when no PIN/owner is stored.
+  Future<bool> verifyPin(String pin) async {
+    final owner = await _storage.read(key: _kPinOwner);
+    if (owner == null) return false;
+    return verifyPinLocal(ownerId: owner, pin: pin);
+  }
+
   Future<void> clear() async {
     await _storage.delete(key: _kPinHash);
     await _storage.delete(key: _kPinOwner);

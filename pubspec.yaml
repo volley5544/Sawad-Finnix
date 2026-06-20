@@ -48,11 +48,21 @@ dependencies:
   firebase_core: ^3.8.0
   firebase_auth: ^5.3.4
   cloud_firestore: ^5.5.1
+  firebase_storage: ^12.3.7
+
+  # File picking + upload (loan statement attachments)
+  file_picker: ^8.1.4
 
   # Onboarding / ThaiID
   url_launcher: ^6.3.1
   flutter_secure_storage: ^9.2.2
   pin_code_fields: ^8.0.1
+
+  # Biometric (fingerprint / Face ID) authentication for PIN-login screen
+  local_auth: ^2.3.0
+
+  # Runtime OS permissions (contacts / location / phone / SMS) for loan request
+  permission_handler: ^11.3.1
 
   # Utils
   intl: ^0.19.0
