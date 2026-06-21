@@ -1,0 +1,186 @@
+# ============================================================================
+# Mutations — mirror the writes the app does today against Firestore.
+# Auto-generated fields used: <type>_insert, _upsert, _update.
+# @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") requires a signed-in Firebase Auth user (same posture as
+# the current Firestore rules: authenticated access).
+# ============================================================================
+
+# UserRepository.saveThaidProfile / saveProfile  (upsert by id = sha256(thaiId))
+mutation UpsertUser(
+  $id: String!
+  $uid: String!
+  $phoneNumber: String
+  $thaiId: String
+  $nameTh: String
+  $nameEn: String
+  $gender: String
+  $address: String
+  $houseAddress: String
+  $dateOfBirth: Date
+  $tokenIssuedAt: Int
+  $tokenExpiresAt: Int
+  $authTime: Int
+) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  user_upsert(
+    data: {
+      id: $id
+      uid: $uid
+      phoneNumber: $phoneNumber
+      thaiId: $thaiId
+      nameTh: $nameTh
+      nameEn: $nameEn
+      gender: $gender
+      address: $address
+      houseAddress: $houseAddress
+      dateOfBirth: $dateOfBirth
+      tokenIssuedAt: $tokenIssuedAt
+      tokenExpiresAt: $tokenExpiresAt
+      authTime: $authTime
+    }
+  )
+}
+
+# LoanRepository.submit  (writes the full loan request)
+mutation CreateLoanRequest(
+  $userId: String!
+  $thaiId: String
+  $nameTh: String!
+  $dateOfBirth: Date
+  $idCardAddress: String!
+  $contactsGranted: Boolean!
+  $deviceInfoGranted: Boolean!
+  $locationGranted: Boolean!
+  $smsGranted: Boolean!
+  $currentAddress: String!
+  $area: String!
+  $postcode: String!
+  $sameAsIdCard: Boolean!
+  $email: String!
+  $education: String!
+  $payrollBank: String!
+  $includeOtherBanks: Boolean!
+  $agreeTerms: Boolean!
+  $marketingConsent: Boolean!
+  $creditModelConsent: Boolean!
+  $productConsent: Boolean!
+) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  loanRequest_insert(
+    data: {
+      userId: $userId
+      thaiId: $thaiId
+      nameTh: $nameTh
+      dateOfBirth: $dateOfBirth
+      idCardAddress: $idCardAddress
+      contactsGranted: $contactsGranted
+      deviceInfoGranted: $deviceInfoGranted
+      locationGranted: $locationGranted
+      smsGranted: $smsGranted
+      currentAddress: $currentAddress
+      area: $area
+      postcode: $postcode
+      sameAsIdCard: $sameAsIdCard
+      email: $email
+      education: $education
+      payrollBank: $payrollBank
+      includeOtherBanks: $includeOtherBanks
+      agreeTerms: $agreeTerms
+      marketingConsent: $marketingConsent
+      creditModelConsent: $creditModelConsent
+      productConsent: $productConsent
+    }
+  )
+}
+
+# Each emergency/reference contact (was the embedded contacts[] array).
+mutation AddLoanContact(
+  $requestId: UUID!
+  $relation: String!
+  $firstName: String!
+  $lastName: String!
+  $phone: String!
+) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  loanContact_insert(
+    data: {
+      requestId: $requestId
+      relation: $relation
+      firstName: $firstName
+      lastName: $lastName
+      phone: $phone
+    }
+  )
+}
+
+# Each uploaded statement file (was the embedded statements[] array).
+mutation AddStatementFile(
+  $requestId: UUID!
+  $name: String!
+  $path: String!
+  $url: String!
+  $size: Int!
+  $contentType: String
+) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  statementFile_insert(
+    data: {
+      requestId: $requestId
+      name: $name
+      path: $path
+      url: $url
+      size: $size
+      contentType: $contentType
+    }
+  )
+}
+
+# LoanAccountRepository — mock approval (Loan.approved).
+mutation ApproveLoan(
+  $id: String!
+  $userId: String!
+  $thaiId: String
+  $principal: Float!
+  $annualInterestRate: Float!
+  $termMonths: Int!
+  $totalPayable: Float!
+  $installmentAmount: Float!
+  $startedAt: Timestamp!
+) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  loan_insert(
+    data: {
+      id: $id
+      userId: $userId
+      thaiId: $thaiId
+      principal: $principal
+      annualInterestRate: $annualInterestRate
+      termMonths: $termMonths
+      totalPayable: $totalPayable
+      installmentAmount: $installmentAmount
+      startedAt: $startedAt
+      paidAmount: 0
+      status: "active"
+    }
+  )
+}
+
+# LoanAccountRepository.pay — records a payment AND updates the loan in ONE
+# operation. In Firestore this was two separate writes (doc.set + payments.add);
+# here both run together (a real relational advantage: atomicity).
+mutation RecordPayment(
+  $loanId: String!
+  $amount: Float!
+  $outstandingAfter: Float!
+  $installmentsPaid: Int!
+  $newPaidAmount: Float!
+  $status: String!
+) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  payment_insert(
+    data: {
+      loanId: $loanId
+      amount: $amount
+      outstandingAfter: $outstandingAfter
+      installmentsPaid: $installmentsPaid
+    }
+  )
+  loan_update(
+    key: { id: $loanId }
+    data: { paidAmount: $newPaidAmount, status: $status }
+  )
+}

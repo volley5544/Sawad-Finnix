@@ -1,0 +1,20 @@
+# Firebase Data Connect service definition (CASE STUDY — not deployed).
+#
+# This declares a fully-managed PostgreSQL (Cloud SQL) service. Deploying it
+# would PROVISION a Cloud SQL instance (real, always-on cost), so it is left
+# undeployed on purpose. See ./README.md.
+specVersion: "v1"
+
+serviceId: "sawad-finnix-uat-service"
+location: "asia-southeast1"          # matches the provisioned UAT service
+
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "sawad-finnix-uat-database"
+      cloudSql:
+        instanceId: "sawad-finnix-uat-instance"
+
+connectorDirs:
+  - "./connector"

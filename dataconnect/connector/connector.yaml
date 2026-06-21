@@ -1,0 +1,11 @@
+# A connector = the named set of queries/mutations your app is allowed to call.
+# The app can ONLY invoke these operations (never arbitrary SQL) — this is the
+# security boundary, analogous to Firestore rules but per-operation.
+connectorId: "default"
+
+# Generates a strongly-typed Flutter/Dart client from the operations below.
+# (Case study only — not generated/committed here.)
+generate:
+  dartSdk:
+    outputDir: "../../lib/dataconnect_generated/default"
+    package: "default_connector"

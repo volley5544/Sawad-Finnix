@@ -1,0 +1,115 @@
+# ============================================================================
+# Queries — mirror the reads the app does today, plus things Firestore can't do
+# easily (joins across tables, aggregates).
+# Auto-generated fields used: <type>(key: ...) for one, <type>s(...) for lists.
+# ============================================================================
+
+# UserRepository.loadProfileByThaiId  (id = sha256(thaiId))
+query GetUser($id: String!) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  user(key: { id: $id }) {
+    id
+    uid
+    phoneNumber
+    thaiId
+    nameTh
+    nameEn
+    gender
+    address
+    houseAddress
+    dateOfBirth
+    hasPin
+    createdAt
+  }
+}
+
+# List a user's loan requests, newest first.
+query ListLoanRequests($userId: String!) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  loanRequests(
+    where: { userId: { eq: $userId } }
+    orderBy: { createdAt: DESC }
+  ) {
+    id
+    status
+    nameTh
+    email
+    payrollBank
+    createdAt
+  }
+}
+
+# A loan request WITH its contacts and statements in one round trip.
+# In Firestore the embedded arrays came free; here the JOIN does the same,
+# but each child is independently queryable/indexable.
+query GetLoanRequestDetail($id: UUID!) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  loanRequest(key: { id: $id }) {
+    id
+    nameTh
+    idCardAddress
+    currentAddress
+    email
+    education
+    payrollBank
+    status
+    createdAt
+    contacts_on_request: loanContacts_on_request {
+      relation
+      firstName
+      lastName
+      phone
+    }
+    statements_on_request: statementFiles_on_request {
+      name
+      url
+      size
+      contentType
+    }
+  }
+}
+
+# LoanAccountRepository.loadActiveLoan — most recent active loan for a user.
+query GetActiveLoan($userId: String!) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  loans(
+    where: { userId: { eq: $userId }, status: { eq: "active" } }
+    orderBy: { approvedAt: DESC }
+    limit: 1
+  ) {
+    id
+    principal
+    annualInterestRate
+    termMonths
+    totalPayable
+    installmentAmount
+    paidAmount
+    startedAt
+    status
+    approvedAt
+  }
+}
+
+# A loan with its full payment history (one round trip).
+query GetLoanWithPayments($loanId: String!) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  loan(key: { id: $loanId }) {
+    id
+    principal
+    totalPayable
+    installmentAmount
+    paidAmount
+    status
+    payments_on_loan(orderBy: { paidAt: DESC }) {
+      amount
+      paidAt
+      outstandingAfter
+      installmentsPaid
+    }
+  }
+}
+
+# Aggregate example — total collected + payment count per loan. This kind of
+# server-side SUM/COUNT is something Firestore cannot do without extra reads.
+query LoanPaymentSummary($loanId: String!) @auth(level: USER, insecureReason: "Case study: anonymous auth cannot bind to the owner; tighten to per-user filters once custom tokens exist") {
+  payments(where: { loanId: { eq: $loanId } }) {
+    _count
+    totalCollected: amount_sum
+    largestPayment: amount_max
+  }
+}

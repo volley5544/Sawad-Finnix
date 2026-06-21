@@ -1,0 +1,126 @@
+# ============================================================================
+# Sawad Finnix — relational schema (Firebase Data Connect / Cloud SQL Postgres)
+# CASE STUDY: mirrors the existing Firestore model as normalized SQL tables.
+#
+# Firestore today:
+#   users/{sha256(thaiId)}                      -> User
+#   users/{..}/loanRequests/{id}                -> LoanRequest
+#     (embedded array) contacts[]               -> LoanContact   (own table)
+#     (embedded array) statements[]             -> StatementFile (own table)
+#   users/{..}/loans/{loanId}                   -> Loan
+#   users/{..}/loans/{loanId}/payments/{id}     -> Payment
+#
+# Each `@table` becomes a Postgres table. A field typed as another @table type
+# (e.g. `user: User!`) becomes a FOREIGN KEY + auto column `userId`, and lets
+# you traverse the relation in queries. Embedded Firestore arrays are split out
+# into child tables (the relational way to model one-to-many).
+# ============================================================================
+
+# users/{sha256(thaiId)}
+# Natural key `id` = sha256(thaiId), matching the Firestore document id.
+type User @table(name: "users", key: "id") {
+  id: String!                 # sha256(thaiId) — same id Firestore uses
+  uid: String!                # Firebase Auth UID
+  phoneNumber: String
+  thaiId: String              # plain pid (sensitive — restrict in production)
+  nameTh: String
+  nameEn: String
+  gender: String
+  address: String
+  houseAddress: String
+  dateOfBirth: Date
+  tokenIssuedAt: Int          # ThaiID token iat (epoch seconds)
+  tokenExpiresAt: Int         # ThaiID token exp (epoch seconds)
+  authTime: Int               # ThaiID auth_time (epoch seconds)
+  hasPin: Boolean! @default(value: false)
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# users/{..}/loanRequests/{id}
+# `id` (UUID) is the requestId. `user` is the FK back to the owner.
+type LoanRequest @table(name: "loan_requests") {
+  id: UUID! @default(expr: "uuidV4()")
+  user: User!
+
+  # Identity snapshot (kept on the request so it is self-contained)
+  thaiId: String
+  nameTh: String!
+  dateOfBirth: Date
+  idCardAddress: String!
+
+  # Device-permission consents
+  contactsGranted: Boolean!
+  deviceInfoGranted: Boolean!
+  locationGranted: Boolean!
+  smsGranted: Boolean!
+
+  # Current address + personal
+  currentAddress: String!
+  area: String!
+  postcode: String!
+  sameAsIdCard: Boolean!
+  email: String!
+  education: String!
+
+  # Bank
+  payrollBank: String!
+  includeOtherBanks: Boolean!
+
+  # Consents
+  agreeTerms: Boolean!
+  marketingConsent: Boolean!
+  creditModelConsent: Boolean!
+  productConsent: Boolean!
+
+  status: String! @default(value: "submitted")
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# Was the embedded `contacts[]` array on the loan request.
+type LoanContact @table(name: "loan_contacts") {
+  id: UUID! @default(expr: "uuidV4()")
+  request: LoanRequest!
+  relation: String!
+  firstName: String!
+  lastName: String!
+  phone: String!
+}
+
+# Was the embedded `statements[]` array (Firebase Storage links).
+type StatementFile @table(name: "statement_files") {
+  id: UUID! @default(expr: "uuidV4()")
+  request: LoanRequest!
+  name: String!
+  path: String!               # Storage object path
+  url: String!                # download URL
+  size: Int!                  # bytes
+  contentType: String
+  uploadedAt: Timestamp! @default(expr: "request.time")
+}
+
+# users/{..}/loans/{loanId}
+# Natural key `id` = loanId (= requestId).
+type Loan @table(name: "loans", key: "id") {
+  id: String!
+  user: User!
+  thaiId: String
+  principal: Float!
+  annualInterestRate: Float!  # fraction, e.g. 0.28 for 28%/yr
+  termMonths: Int!
+  totalPayable: Float!        # principal + interest
+  installmentAmount: Float!
+  paidAmount: Float! @default(value: 0)
+  startedAt: Timestamp!
+  status: String! @default(value: "active")   # 'active' | 'closed'
+  approvedAt: Timestamp! @default(expr: "request.time")
+}
+
+# users/{..}/loans/{loanId}/payments/{id}
+type Payment @table(name: "payments") {
+  id: UUID! @default(expr: "uuidV4()")
+  loan: Loan!
+  amount: Float!
+  paidAt: Timestamp! @default(expr: "request.time")
+  outstandingAfter: Float!
+  installmentsPaid: Int!
+}
