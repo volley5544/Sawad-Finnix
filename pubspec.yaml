@@ -72,6 +72,14 @@ dependencies:
   qr_flutter: ^4.1.0
   crypto: ^3.0.6
 
+  # Hybrid web features: host frequently-changing flows (e.g. loan request) as
+  # Flutter-web builds on Firebase Hosting and embed them in the app so the
+  # business can update product/conditions without an app-store release.
+  flutter_inappwebview: ^6.1.5
+  # Document/OCR capture bridged from the embedded web build to the native camera
+  image_picker: ^1.1.2
+  mime: ^1.0.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

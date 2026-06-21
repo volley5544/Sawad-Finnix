@@ -1,15 +1,36 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/router/app_routes.dart';
+import '../../../core/config/web_features.dart';
 import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/thai_id.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../loan/data/loan_account_repository.dart';
 import '../../loan/models/loan.dart';
 import '../models/loan_summary.dart';
+
+/// Opens the loan-request flow.
+///
+/// On **mobile** this launches the loan-request flow hosted on Firebase Hosting
+/// inside an in-app webview, so the business can update the flow/conditions by
+/// redeploying the web build — no app-store release. On **web** we are already
+/// in a browser, so it uses the native page directly.
+void openLoanRequest(BuildContext context) {
+  if (kIsWeb) {
+    context.push(AppRoutes.loanRequest);
+    return;
+  }
+  final appState = AppState.instance;
+  final thaiId = appState.profile?.thaiId ?? appState.thaiId ?? '';
+  final hash = thaiId.isEmpty ? null : ThaiId.hash(thaiId);
+  final url = WebFeatures.loanRequest(appState.env, hashThaiId: hash);
+  context.push(AppRoutes.loanRequestWeb, extra: url);
+}
 
 /// Home page with credit-line card, statement summary, promo banner and a
 /// bottom navigation between the home and "my info" tabs.
@@ -110,7 +131,7 @@ class _HomeTab extends StatelessWidget {
             const SizedBox(height: 12),
             _LinkRow(
               label: 'โอกาสเพิ่มวงเงินให้สูงขึ้น',
-              onTap: () => context.push(AppRoutes.loanRequest),
+              onTap: () => openLoanRequest(context),
             ),
             const SizedBox(height: 16),
             if (loan != null)
@@ -206,7 +227,7 @@ class _BalanceCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(24),
                   ),
                 ),
-                onPressed: () => context.push(AppRoutes.loanRequest),
+                onPressed: () => openLoanRequest(context),
                 child: const Text('ถอนเงิน',
                     style: TextStyle(fontWeight: FontWeight.w700)),
               ),

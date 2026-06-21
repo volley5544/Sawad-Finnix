@@ -27,4 +27,8 @@ class AppRoutes {
 
   // Loan request (multi-step)
   static const loanRequest = '/loan/request';
+
+  // Loan request served as a hosted web flow, embedded in an in-app webview
+  // (mobile). The native [loanRequest] page is kept as the web/fallback path.
+  static const loanRequestWeb = '/loan/request-web';
 }

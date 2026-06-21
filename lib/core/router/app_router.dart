@@ -16,6 +16,7 @@ import '../../features/loan/pages/pay_loan_page.dart';
 import '../../features/loan/pages/payment_qr_page.dart';
 import '../../features/loan/pages/receipt_page.dart';
 import '../../features/loan/pages/loan_request_page.dart';
+import '../widgets/web_feature_webview_page.dart';
 import 'app_routes.dart';
 
 /// Application router.
@@ -97,6 +98,14 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.loanRequest,
         builder: (context, state) => const LoanRequestPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.loanRequestWeb,
+        // The loan-request web URL (built via WebFeatures) is passed as `extra`.
+        builder: (context, state) => WebFeatureWebviewPage(
+          webUrl: state.extra as String?,
+          title: 'ขอสินเชื่อ',
+        ),
       ),
     ],
   );

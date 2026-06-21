@@ -55,10 +55,16 @@ class EnvConfig {
     required this.firebaseProjectId,
     required this.services,
     required this.banner,
+    required this.webBaseUrl,
   });
 
   final AppEnvironment environment;
   final String firebaseProjectId;
+
+  /// Base URL of the Firebase Hosting site for this environment. Hybrid web
+  /// features (loaded in an in-app webview) are served from here, so the
+  /// business can update those flows by redeploying Hosting — no app release.
+  final String webBaseUrl;
 
   /// Registry of backend endpoints, one entry per [ApiService].
   final Map<ApiService, ServiceEndpoint> services;
@@ -98,6 +104,7 @@ class EnvConfig {
   static const EnvConfig _prod = EnvConfig(
     environment: AppEnvironment.prod,
     firebaseProjectId: 'sawad-finnix',
+    webBaseUrl: 'https://sawad-finnix.web.app',
     services: {
       ApiService.otp: _otp,
       ApiService.thaid: _thaid,
@@ -110,6 +117,7 @@ class EnvConfig {
   static const EnvConfig _uat = EnvConfig(
     environment: AppEnvironment.uat,
     firebaseProjectId: 'sawad-finnix-uat',
+    webBaseUrl: 'https://sawad-finnix-uat.web.app',
     services: {
       ApiService.otp: _otp,
       ApiService.thaid: _thaid,
