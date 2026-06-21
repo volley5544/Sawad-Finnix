@@ -1,10 +1,10 @@
 name: Deploy Firebase Hosting
 
-# UAT: deploys on every push to the main branch (auto-deploy on change).
-# PROD: deploys only on a version tag (v*) or a manual run.
+# UAT: deploys on every push to the uat branch (auto-deploy on change).
+# PROD: deploys on push to the prod branch, a version tag (v*), or a manual run.
 on:
   push:
-    branches: [main, master]
+    branches: [uat, prod]
     tags: ['v*']
   workflow_dispatch:
     inputs:
@@ -19,9 +19,12 @@ env:
   FLUTTER_VERSION: '3.38.5'
 
 jobs:
-  # ---- UAT: every push to main/master --------------------------------------
+  # ---- UAT: every push to the uat branch -----------------------------------
   deploy-uat:
-    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/uat') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.environment == 'uat')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,10 +42,11 @@ jobs:
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
-  # ---- PROD: on tag push or manual dispatch with environment=prod ----------
+  # ---- PROD: on prod branch push, tag push, or manual dispatch -------------
   deploy-prod:
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/prod') ||
       (github.event_name == 'workflow_dispatch' &&
        github.event.inputs.environment == 'prod')
     runs-on: ubuntu-latest
