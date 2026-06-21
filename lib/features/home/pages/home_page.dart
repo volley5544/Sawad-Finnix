@@ -14,22 +14,28 @@ import '../../loan/data/loan_account_repository.dart';
 import '../../loan/models/loan.dart';
 import '../models/loan_summary.dart';
 
-/// Opens the loan-request flow.
+/// Opens the loan-request flow, choosing native vs hosted-web based on the
+/// remote config flag `loanRequestUseWeb` (Firestore `config/app`).
 ///
-/// On **mobile** this launches the loan-request flow hosted on Firebase Hosting
-/// inside an in-app webview, so the business can update the flow/conditions by
-/// redeploying the web build — no app-store release. On **web** we are already
-/// in a browser, so it uses the native page directly.
+/// - flag **true** (and on mobile): launches the loan-request flow hosted on
+///   Firebase Hosting inside an in-app webview, so the business can update the
+///   flow/conditions by redeploying the web build — no app-store release.
+/// - flag **false**: opens the native [LoanRequestPage] (step 1).
+///
+/// On **web** we are already in a browser, so the native page is always used
+/// (avoids embedding the app within itself).
 void openLoanRequest(BuildContext context) {
-  if (kIsWeb) {
-    context.push(AppRoutes.loanRequest);
+  final appState = AppState.instance;
+
+  if (appState.loanRequestUseWeb && !kIsWeb) {
+    final thaiId = appState.profile?.thaiId ?? appState.thaiId ?? '';
+    final hash = thaiId.isEmpty ? null : ThaiId.hash(thaiId);
+    final url = WebFeatures.loanRequest(appState.env, hashThaiId: hash);
+    context.push(AppRoutes.loanRequestWeb, extra: url);
     return;
   }
-  final appState = AppState.instance;
-  final thaiId = appState.profile?.thaiId ?? appState.thaiId ?? '';
-  final hash = thaiId.isEmpty ? null : ThaiId.hash(thaiId);
-  final url = WebFeatures.loanRequest(appState.env, hashThaiId: hash);
-  context.push(AppRoutes.loanRequestWeb, extra: url);
+
+  context.push(AppRoutes.loanRequest);
 }
 
 /// Home page with credit-line card, statement summary, promo banner and a
@@ -48,7 +54,12 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadLoan());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadLoan();
+      // Refresh remote feature flags (e.g. loanRequestUseWeb) so the
+      // loan-request entry reflects the latest Firestore config.
+      context.read<AppState>().loadRemoteConfig();
+    });
   }
 
   /// Best-effort: if we don't already have a loan in state, try to load one

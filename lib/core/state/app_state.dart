@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../config/env_config.dart';
+import '../config/app_config_repository.dart';
 import '../../features/auth/models/user_profile.dart';
 import '../../features/auth/models/thaid_status.dart';
 import '../../features/loan/models/loan.dart';
@@ -24,6 +25,25 @@ class AppState extends ChangeNotifier {
   AppEnvironment get environment => env.environment;
   bool get isUat => env.environment.isUat;
   String get bannerText => env.banner;
+
+  // ---- Remote (Firestore) feature config -----------------------------------
+
+  /// Remote feature flags loaded from Firestore `config/app`. Defaults to the
+  /// safe defaults until [loadRemoteConfig] completes.
+  AppConfig _appConfig = AppConfig.defaults;
+  AppConfig get appConfig => _appConfig;
+
+  /// Whether the loan-request entry should open the hosted web flow (in a
+  /// webview) instead of the native page. Driven by the remote config.
+  bool get loanRequestUseWeb => _appConfig.loanRequestUseWeb;
+
+  /// Fetches the remote config from Firestore and updates state. Best-effort:
+  /// keeps the current/default config on failure.
+  Future<void> loadRemoteConfig({AppConfigRepository? repository}) async {
+    final config = await (repository ?? AppConfigRepository()).fetch();
+    _appConfig = config;
+    notifyListeners();
+  }
 
   // ---- Session / onboarding scratch state ----------------------------------
 
