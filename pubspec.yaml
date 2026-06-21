@@ -80,6 +80,10 @@ dependencies:
   image_picker: ^1.1.2
   mime: ^1.0.6
 
+  # Web→native bridge (js_interop) used by the finnix WEB build when it runs
+  # inside the native in-app webview host (see lib/services/native_bridge.dart).
+  web: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
