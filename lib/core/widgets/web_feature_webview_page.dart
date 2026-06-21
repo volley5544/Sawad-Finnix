@@ -34,6 +34,12 @@ class WebFeatureWebviewPage extends StatefulWidget {
 class _WebFeatureWebviewPageState extends State<WebFeatureWebviewPage> {
   bool _loading = true;
 
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('[webview] opening feature url: ${widget.webUrl}');
+  }
+
   void _close() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();

@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
+
+import '../config/web_features.dart';
 
 import '../../features/auth/pages/phone_page.dart';
 import '../../features/auth/pages/splash_page.dart';
@@ -26,8 +29,25 @@ import 'app_routes.dart';
 class AppRouter {
   AppRouter._();
 
+  /// Computes the startup location.
+  ///
+  /// On **web**, when the app is opened with a `?feature=` query param (used by
+  /// the in-app webview host — see [WebFeatures]), it starts directly on that
+  /// feature's route, bypassing the splash/onboarding gate. This is honored by
+  /// go_router because the (hash) fragment is empty, so `initialLocation` wins.
+  /// Everywhere else it starts at the splash gate.
+  static String _initialLocation() {
+    if (kIsWeb) {
+      final feature = Uri.base.queryParameters['feature'];
+      if (feature == WebFeatures.loanRequestFeature) {
+        return AppRoutes.loanRequest;
+      }
+    }
+    return AppRoutes.splash;
+  }
+
   static final GoRouter router = GoRouter(
-    initialLocation: AppRoutes.splash,
+    initialLocation: _initialLocation(),
     routes: [
       GoRoute(
         path: AppRoutes.splash,

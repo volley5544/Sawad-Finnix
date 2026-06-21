@@ -1,4 +1,3 @@
-import '../router/app_routes.dart';
 import 'env_config.dart';
 
 /// Frequently-changing product flows that are served as Flutter-web builds on
@@ -8,25 +7,28 @@ import 'env_config.dart';
 /// conditions, copy, etc. and deploy instantly — no app-store release. The
 /// native app is just a thin host (see `WebFeatureWebviewPage`).
 ///
-/// The finnix web build uses Flutter's default **hash** URL strategy, so we
-/// deep-link straight to the target route via `/#<route>`. This lands the
-/// webview directly on the feature route and **bypasses the splash/onboarding
-/// gate** (which would otherwise redirect a fresh, unauthenticated web session
-/// to the phone step). A `hashThaiId` (sha256 of the Thai national ID) is
-/// appended so the web flow can identify the user, mirroring the
-/// universal-webview `?hashThaiId=` contract.
+/// ## Why a `?feature=` query param (not a hash route)
+///
+/// The finnix web build uses Flutter's default **hash** URL strategy, so a
+/// route only comes from the URL *fragment*. To open a feature directly and
+/// reliably — bypassing the splash/onboarding gate that would otherwise send a
+/// fresh, unauthenticated web session to the phone step — we pass the target as
+/// a normal query parameter. The web app reads it via `Uri.base` at startup and
+/// uses it as the router's `initialLocation` (see `AppRouter`). Query params
+/// are always preserved (no fragment/deep-link quirks). `hashThaiId` (sha256 of
+/// the Thai national ID) is included so the web flow can identify the user.
 class WebFeatures {
   WebFeatures._();
 
-  /// Loan-request multi-step flow (step 1 onward), opened directly on its route.
-  static String loanRequest(EnvConfig env, {String? hashThaiId}) {
-    return _withHash('${env.webBaseUrl}/#${AppRoutes.loanRequest}', hashThaiId);
-  }
+  /// Value of `?feature=` that maps to the loan-request flow.
+  static const String loanRequestFeature = 'loan-request';
 
-  /// Appends `?hashThaiId=` (or `&hashThaiId=`) when a hash is provided.
-  static String _withHash(String url, String? hashThaiId) {
-    if (hashThaiId == null || hashThaiId.isEmpty) return url;
-    final sep = url.contains('?') ? '&' : '?';
-    return '$url${sep}hashThaiId=$hashThaiId';
+  /// Loan-request multi-step flow, opened directly (skips splash/onboarding).
+  static String loanRequest(EnvConfig env, {String? hashThaiId}) {
+    final params = <String, String>{'feature': loanRequestFeature};
+    if (hashThaiId != null && hashThaiId.isNotEmpty) {
+      params['hashThaiId'] = hashThaiId;
+    }
+    return Uri.parse(env.webBaseUrl).replace(queryParameters: params).toString();
   }
 }
