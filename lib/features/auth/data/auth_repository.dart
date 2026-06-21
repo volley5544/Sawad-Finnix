@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../../core/network/api_client.dart';
+import '../../../core/router/app_routes.dart';
 import '../models/auth_responses.dart';
 import '../models/thaid_status.dart';
 
@@ -42,13 +44,34 @@ class AuthRepository {
     return input.trim() == expectedCode.trim() && expectedCode.isNotEmpty;
   }
 
+  /// ThaiID redirect target on native mobile: a custom-scheme deep link that
+  /// reopens the installed app on the success route.
+  static const _mobileRedirect =
+      'sawadfinnix://sawadfinnix.com/onboarding/success';
+
+  /// The URL ThaiID should redirect back to after verification.
+  ///
+  /// - **Native (iOS/Android)**: the [_mobileRedirect] custom-scheme deep link
+  ///   reopens the app.
+  /// - **Web**: there is no app to deep-link into, so we return to the Firebase
+  ///   Hosting site currently serving the app. [Uri.base] is the live page URL,
+  ///   so its origin is the hosting domain (this also works for local
+  ///   `flutter run -d chrome`). The app uses Flutter web's default *hash* URL
+  ///   strategy, so the success route is reached via `/#/onboarding/success`.
+  String _thaidRedirect() {
+    if (kIsWeb) {
+      return '${Uri.base.origin}/#${AppRoutes.onboardingSuccess}';
+    }
+    return _mobileRedirect;
+  }
+
   /// Requests a ThaiID verification link + session id.
   Future<ThaidLinkResponse> getThaidLink() async {
     try {
       final res = await _api.thaid().get(
         '/auth/thaid/link',
         queryParameters: {
-          'redirect': 'sawadfinnix://sawadfinnix.com/onboarding/success',
+          'redirect': _thaidRedirect(),
         },
       );
       final data = res.data;
