@@ -1,3 +1,4 @@
+import '../router/app_routes.dart';
 import 'env_config.dart';
 
 /// Frequently-changing product flows that are served as Flutter-web builds on
@@ -7,20 +8,19 @@ import 'env_config.dart';
 /// conditions, copy, etc. and deploy instantly — no app-store release. The
 /// native app is just a thin host (see `WebFeatureWebviewPage`).
 ///
-/// Each helper builds the Hosting URL for one feature. A `hashThaiId`
-/// (sha256 of the Thai national ID) is appended so the web build can identify
-/// the signed-in user on startup, mirroring the universal-webview
-/// `?hashThaiId=` contract.
+/// The finnix web build uses Flutter's default **hash** URL strategy, so we
+/// deep-link straight to the target route via `/#<route>`. This lands the
+/// webview directly on the feature route and **bypasses the splash/onboarding
+/// gate** (which would otherwise redirect a fresh, unauthenticated web session
+/// to the phone step). A `hashThaiId` (sha256 of the Thai national ID) is
+/// appended so the web flow can identify the user, mirroring the
+/// universal-webview `?hashThaiId=` contract.
 class WebFeatures {
   WebFeatures._();
 
-  /// Path (under the Hosting site) of the loan-request web flow. Kept as a
-  /// constant so the deployed location is documented in one place.
-  static const String loanRequestPath = '/loan-request';
-
-  /// Loan-request multi-step flow (step 1 onward), served from Hosting.
+  /// Loan-request multi-step flow (step 1 onward), opened directly on its route.
   static String loanRequest(EnvConfig env, {String? hashThaiId}) {
-    return _withHash('${env.webBaseUrl}$loanRequestPath', hashThaiId);
+    return _withHash('${env.webBaseUrl}/#${AppRoutes.loanRequest}', hashThaiId);
   }
 
   /// Appends `?hashThaiId=` (or `&hashThaiId=`) when a hash is provided.
