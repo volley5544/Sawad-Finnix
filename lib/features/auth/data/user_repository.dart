@@ -144,4 +144,25 @@ class UserRepository {
     debugPrint('[profile] loadProfileByThaiId: loaded $docId');
     return UserProfile.fromMap(data);
   }
+
+  /// Reloads the latest profile from Firestore by its **document id** (the
+  /// `sha256(thaiId)` hash), rather than the plain Thai ID.
+  ///
+  /// Used by the hosted loan-request web flow: when the app is opened directly
+  /// inside the in-app webview there is no onboarding/session, so the profile
+  /// is re-fetched using the `hashThaiId` passed in the URL (which equals the
+  /// user document id). Ensures an (anonymous) Firebase Auth session first so
+  /// Firestore rules pass. Returns null when no document exists.
+  Future<UserProfile?> loadProfileByHash(String docId) async {
+    if (docId.isEmpty) return null;
+    await ensureSignedIn();
+    final snapshot = await _users.doc(docId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) {
+      debugPrint('[profile] loadProfileByHash: no doc for $docId');
+      return null;
+    }
+    debugPrint('[profile] loadProfileByHash: loaded $docId');
+    return UserProfile.fromMap(data);
+  }
 }

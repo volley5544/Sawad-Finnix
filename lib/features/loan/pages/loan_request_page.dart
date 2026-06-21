@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/thai_id.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../auth/data/user_repository.dart';
 import '../../auth/models/user_profile.dart';
 import '../data/loan_repository.dart';
 import '../data/loan_account_repository.dart';
@@ -82,6 +84,7 @@ class _LoanRequestPageState extends State<LoanRequestPage> {
 
   final AppPermissions _permissions = const AppPermissions();
   final LoanRepository _loanRepo = LoanRepository();
+  final UserRepository _userRepo = UserRepository();
   late final String _requestId;
 
   // Controllers for the free-text inputs.
@@ -111,6 +114,21 @@ class _LoanRequestPageState extends State<LoanRequestPage> {
     _profile = context.read<AppState>().profile;
     _requestId = _loanRepo.newRequestId(_profile?.thaiId ?? '');
     _loadPermissionStatuses();
+    _maybeLoadWebProfile();
+  }
+
+  /// On **web** (opened directly inside the in-app webview), the app starts on
+  /// this page with no onboarding/session, so [AppState] has no profile.
+  /// Re-fetch it from Firestore using the `hashThaiId` query param passed in the
+  /// URL (which is the user's document id), then reflect it in state + UI.
+  Future<void> _maybeLoadWebProfile() async {
+    if (!kIsWeb || _profile != null) return;
+    final hash = Uri.base.queryParameters['hashThaiId'] ?? '';
+    if (hash.isEmpty) return;
+    final profile = await _userRepo.loadProfileByHash(hash);
+    if (profile == null || !mounted) return;
+    context.read<AppState>().setProfile(profile);
+    setState(() => _profile = profile);
   }
 
   /// Reflects any already-granted OS permissions in the tiles on entry.
