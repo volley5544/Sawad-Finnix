@@ -38,6 +38,21 @@ void openLoanRequest(BuildContext context) {
   context.push(AppRoutes.loanRequest);
 }
 
+/// Guards a real (authenticated) action behind onboarding.
+///
+/// In "preview/advertise" mode anyone can browse the home page without signing
+/// in. The moment a guest taps a real action — withdraw, request a loan, pay,
+/// view loan detail — we route them into onboarding at the phone step so they
+/// can register. Registered users (a profile is present in [AppState]) run the
+/// real [ifOnboarded] action.
+void requireOnboarded(BuildContext context, VoidCallback ifOnboarded) {
+  if (AppState.instance.isSignedIn) {
+    ifOnboarded();
+  } else {
+    context.push(AppRoutes.phone);
+  }
+}
+
 /// Home page with credit-line card, statement summary, promo banner and a
 /// bottom navigation between the home and "my info" tabs.
 class HomePage extends StatefulWidget {
@@ -111,6 +126,7 @@ class _HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isSignedIn = context.watch<AppState>().isSignedIn;
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -138,11 +154,16 @@ class _HomeTab extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
+            // Guests see a register/sign-in CTA that opens onboarding.
+            if (!isSignedIn) ...[
+              _RegisterCta(onTap: () => context.push(AppRoutes.phone)),
+              const SizedBox(height: 16),
+            ],
             _BalanceCard(summary: summary),
             const SizedBox(height: 12),
             _LinkRow(
               label: 'โอกาสเพิ่มวงเงินให้สูงขึ้น',
-              onTap: () => openLoanRequest(context),
+              onTap: () => requireOnboarded(context, () => openLoanRequest(context)),
             ),
             const SizedBox(height: 16),
             if (loan != null)
@@ -152,6 +173,79 @@ class _HomeTab extends StatelessWidget {
             const SizedBox(height: 16),
             const _PromoBanner(),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Guest call-to-action: prompts the visitor to register / sign in to unlock
+/// special privileges. Tapping it opens onboarding at the phone step.
+class _RegisterCta extends StatelessWidget {
+  const _RegisterCta({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(
+              colors: [AppColors.primary, AppColors.accent],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.3),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.card_giftcard,
+                    color: Colors.white, size: 26),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'สมัคร / เข้าสู่ระบบ',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'เพื่อรับสิทธิพิเศษ',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios,
+                  color: Colors.white, size: 18),
+            ],
+          ),
         ),
       ),
     );
@@ -238,7 +332,7 @@ class _BalanceCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(24),
                   ),
                 ),
-                onPressed: () => openLoanRequest(context),
+                onPressed: () => requireOnboarded(context, () => openLoanRequest(context)),
                 child: const Text('ถอนเงิน',
                     style: TextStyle(fontWeight: FontWeight.w700)),
               ),
@@ -444,7 +538,8 @@ class _StatementCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 InkWell(
-                  onTap: () => context.push(AppRoutes.loanDetail),
+                  onTap: () => requireOnboarded(
+                      context, () => context.push(AppRoutes.loanDetail)),
                   child: const Row(
                     children: [
                       Text('รายละเอียดสินเชื่อ',
@@ -473,7 +568,8 @@ class _StatementCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(24),
                     ),
                   ),
-                  onPressed: () => context.push(AppRoutes.paymentChannels),
+                  onPressed: () => requireOnboarded(
+                      context, () => context.push(AppRoutes.paymentChannels)),
                   child: const Text('จ่ายเลย'),
                 ),
               ],
