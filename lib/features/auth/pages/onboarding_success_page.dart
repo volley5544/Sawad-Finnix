@@ -79,10 +79,7 @@ class _OnboardingSuccessPageState extends State<OnboardingSuccessPage> {
         ? widget.sessionId
         : _appState.thaidSessionId;
     if (sessionId == null || sessionId.isEmpty) {
-      setState(() {
-        _phase = _Phase.failed;
-        _error = 'ไม่พบ session การยืนยันตัวตน กรุณาเริ่มใหม่';
-      });
+      await _fail('ไม่พบ session การยืนยันตัวตน กรุณาเริ่มใหม่');
       return;
     }
 
@@ -106,10 +103,11 @@ class _OnboardingSuccessPageState extends State<OnboardingSuccessPage> {
 
       if (status == null || !status.isSuccess) {
         if (!mounted) return;
-        setState(() {
-          _phase = _Phase.failed;
-          _error = 'การยืนยันตัวตนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
-        });
+        final reason = status?.state == ThaidVerifyState.failed
+            ? 'ThaiID แจ้งว่าการยืนยันตัวตนล้มเหลว (failed)'
+            : 'การยืนยันตัวตนยังไม่สำเร็จ (timeout/pending)';
+        await _fail('การยืนยันตัวตนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+            detail: reason);
         return;
       }
 
@@ -117,20 +115,41 @@ class _OnboardingSuccessPageState extends State<OnboardingSuccessPage> {
 
       // Validate the ID/DOB the user entered against the verified ThaiID data
       // (the same safeguard the verify page applied before this deep-link path).
+      //
+      // IMPORTANT (web): the ThaiID redirect is a full page reload on web, which
+      // resets the in-memory [AppState] singleton — so the entered ID/DOB are
+      // null here even though the user typed them earlier. We therefore only
+      // treat it as a mismatch when an entered value is actually present AND
+      // differs from the verified value. When the entered value is missing
+      // (state lost on web), we skip the local safeguard and trust the
+      // ThaiID-verified data.
       final enteredId = _appState.thaiId;
       final enteredDob = _appState.dateOfBirth;
       final verifiedId = person?.pid;
       final verifiedDob = person?.birthDate;
-      final idMatch =
-          enteredId != null && verifiedId != null && enteredId == verifiedId;
-      final dobMatch = enteredDob != null &&
+      final idProvided = enteredId != null && enteredId.isNotEmpty;
+      final dobProvided = enteredDob != null;
+      final idMismatch =
+          idProvided && verifiedId != null && enteredId != verifiedId;
+      final dobMismatch = dobProvided &&
           verifiedDob != null &&
-          _sameDate(enteredDob, verifiedDob);
+          !_sameDate(enteredDob, verifiedDob);
 
       debugPrint('[success] callback hasPerson=${person != null} '
-          'idMatch=$idMatch dobMatch=$dobMatch');
+          'idProvided=$idProvided dobProvided=$dobProvided '
+          'idMismatch=$idMismatch dobMismatch=$dobMismatch');
 
-      if (!idMatch || !dobMatch) {
+      if (idMismatch || dobMismatch) {
+        if (!mounted) return;
+        // Surface what actually differed so the cause is visible, then send the
+        // user back to re-enter their info.
+        await _alert(
+          'ข้อมูลไม่ตรงกัน',
+          [
+            if (idMismatch) 'เลขบัตรที่กรอก ($enteredId) ไม่ตรงกับ ThaiID ($verifiedId)',
+            if (dobMismatch) 'วันเกิดที่กรอกไม่ตรงกับ ThaiID',
+          ].join('\n'),
+        );
         if (!mounted) return;
         context.go(AppRoutes.thaidMismatch);
         return;
@@ -150,13 +169,44 @@ class _OnboardingSuccessPageState extends State<OnboardingSuccessPage> {
       if (!mounted) return;
       _appState.setProfile(profile);
       setState(() => _phase = _Phase.success);
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[success] error after callback: $e\n$st');
       if (!mounted) return;
+      await _fail('บันทึกข้อมูลผู้ใช้ไม่สำเร็จ', detail: '$e');
+    }
+  }
+
+  /// Marks the page as failed, records [message] (+ optional [detail]) and pops
+  /// an alert dialog so the actual error is visible to the user.
+  Future<void> _fail(String message, {String? detail}) async {
+    final full = detail == null || detail.isEmpty
+        ? message
+        : '$message\n\n$detail';
+    if (mounted) {
       setState(() {
         _phase = _Phase.failed;
-        _error = 'บันทึกข้อมูลผู้ใช้ไม่สำเร็จ: $e';
+        _error = full;
       });
     }
+    await _alert('เกิดข้อผิดพลาด', full);
+  }
+
+  /// Shows a simple alert dialog with [title] and [message].
+  Future<void> _alert(String title, String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('ตกลง'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
