@@ -84,14 +84,28 @@ class UserRepository {
     final snapshot = await docRef.get();
 
     if (snapshot.exists && snapshot.data() != null) {
+      final existing = UserProfile.fromMap(snapshot.data()!);
       // Existing user: refresh the authentication time and the auth uid.
-      await docRef.set(
-        {'authTime': profile.authTime, 'uid': profile.uid},
-        SetOptions(merge: true),
+      final update = <String, dynamic>{
+        'authTime': profile.authTime,
+        'uid': profile.uid,
+      };
+      // Backfill the phone number if the stored doc is missing one but we now
+      // have it. This covers docs first created on web before the phone could
+      // be restored across the ThaiID redirect page reload.
+      final hasStoredPhone =
+          existing.phoneNumber != null && existing.phoneNumber!.isNotEmpty;
+      if (!hasStoredPhone && phoneNumber != null && phoneNumber.isNotEmpty) {
+        update['phoneNumber'] = phoneNumber;
+      }
+      await docRef.set(update, SetOptions(merge: true));
+      debugPrint('[profile] updated existing doc '
+          '(phoneBackfilled=${update.containsKey('phoneNumber')})');
+      return existing.copyWith(
+        authTime: profile.authTime,
+        uid: profile.uid,
+        phoneNumber: update['phoneNumber'] as String? ?? existing.phoneNumber,
       );
-      debugPrint('[profile] updated existing doc');
-      return UserProfile.fromMap(snapshot.data()!)
-          .copyWith(authTime: profile.authTime, uid: profile.uid);
     }
 
     // New user: create the full profile document.

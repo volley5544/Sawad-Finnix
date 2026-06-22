@@ -9,6 +9,7 @@ import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../data/auth_repository.dart';
+import '../data/onboarding_store.dart';
 
 /// Step 1: enter phone number and request an OTP.
 class PhonePage extends StatefulWidget {
@@ -37,6 +38,9 @@ class _PhonePageState extends State<PhonePage> {
     try {
       final otp = await repo.sendOtp(phone);
       appState.phoneNumber = phone;
+      // Persist the phone so it survives the ThaiID redirect page reload on web
+      // (which resets the in-memory AppState). Restored in OnboardingSuccess.
+      await OnboardingStore().savePhoneNumber(phone);
       appState.setOtp(code: otp.code, ref: otp.ref);
       if (!mounted) return;
       context.push(AppRoutes.otp);

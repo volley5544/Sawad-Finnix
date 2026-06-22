@@ -8,6 +8,7 @@ import '../../../core/state/app_state.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../data/auth_repository.dart';
+import '../data/onboarding_store.dart';
 import '../data/user_repository.dart';
 import '../models/thaid_status.dart';
 
@@ -161,11 +162,30 @@ class _OnboardingSuccessPageState extends State<OnboardingSuccessPage> {
 
       // Upsert the user (create or update authTime) and create the anonymous
       // Firebase Auth session.
+      //
+      // On web the ThaiID redirect reloaded the page and reset AppState, so
+      // [_appState.phoneNumber] may be null here even though the user entered
+      // it earlier. ThaiID does not return a phone number, so we restore it
+      // from the persisted onboarding value as a fallback.
+      final onboardingStore = OnboardingStore();
+      var phoneNumber = _appState.phoneNumber;
+      if (phoneNumber == null || phoneNumber.isEmpty) {
+        phoneNumber = await onboardingStore.readPhoneNumber();
+        if (phoneNumber != null && phoneNumber.isNotEmpty) {
+          _appState.phoneNumber = phoneNumber;
+        }
+      }
+      debugPrint('[success] phone for upsert='
+          '${phoneNumber == null || phoneNumber.isEmpty ? '<none>' : 'present'} '
+          '(fromAppState=${_appState.phoneNumber != null})');
+
       final user = _extractThaidUser(status.raw);
       final profile = await _userRepo.saveThaidProfile(
         user,
-        phoneNumber: _appState.phoneNumber,
+        phoneNumber: phoneNumber,
       );
+      // The phone has now been persisted to the profile; drop the scratch copy.
+      await onboardingStore.clearPhoneNumber();
       if (!mounted) return;
       _appState.setProfile(profile);
       setState(() => _phase = _Phase.success);
